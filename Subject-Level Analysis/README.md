@@ -3,6 +3,13 @@ Section List
 
 1. [BIDS Conversion Using Heudiconv](#1.-BIDS-Conversion-Using-Heudiconv)
 2. [Check slice timing for Time 2 data](#2.-Check-slice-timing-for-Time-2-data)
+3. [Exclude dummy TRs](#-3.-Exclude-dummy-TRs)
+4. [Test phase encoding direction](#-4.-Test-phase-encoding-direction)
+5. [Run FMRIPREP](#-5.-Run-FMRIPREP)
+6. [Run MRIQC](#-6.-Run-MRIQC)
+7. [Create masks for the extended Power ROI](#-7.-Create-masks-for-the-extended-Power-ROI)
+8. [Post-processing after fMRIPrep: Nuisance Regression & Signal extraction](#-8.-Post-processing-after-fMRIPrep:-Nuisance-Regression-&-Signal-extraction)
+
 
 # 1. BIDS Conversion Using Heudiconv
 
