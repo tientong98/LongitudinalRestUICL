@@ -1,4 +1,9 @@
 
+Section List
+
+1. [BIDS Conversion Using Heudiconv](#1.-BIDS-Conversion-Using-Heudiconv)
+2. [Check slice timing for Time 2 data](#2.-Check-slice-timing-for-Time-2-data)
+
 # 1. BIDS Conversion Using Heudiconv
 
 [Heudiconv.ipynb](https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/Heudiconv.ipynb)
