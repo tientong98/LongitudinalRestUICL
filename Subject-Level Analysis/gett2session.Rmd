@@ -1,0 +1,55 @@
+---
+title: "Get T2 Session"
+output: html_notebook
+---
+
+
+```{r}
+rm(list=ls())
+library(dplyr)
+```
+
+
+```{r}
+df <- read.table("time1time2_id.txt", header = F, stringsAsFactors = F)
+names(df) <- "info"
+
+df$sub <- NA
+df$ses <- NA
+
+for (i in 1:length(df$info)) {
+  df$sub[i] <- as.numeric(strsplit(df$info, "_")[[i]][1])
+  df$ses[i] <- as.numeric(strsplit(df$info, "_")[[i]][2])
+}
+df <- df %>% arrange(sub)
+subid <- unique(df$sub)
+```
+
+129 subjects have time 2 gender data
+
+```{r}
+# for the subjects who had 2 MRQID, chose the session with the larger 2 digits, then write to a txt file
+# only 119 subjects (who had time 2 gender data) had 2 MRQIDs
+
+for (i in 1:length(subid)) {
+  newdf <- df %>% filter(sub == subid[i])
+  if ((length(newdf$sub)) == 2) {
+    ifelse((newdf[1,"ses"] %% 100) > (newdf[2,"ses"] %% 100), newdf <- newdf[1,], newdf <- newdf[2,])
+    write.table(newdf, "time2_idses.txt", quote = F, col.names = F, row.names = F, append = T)
+  }
+}
+
+```
+
+
+```{r}
+# print out the 10 people who had time 2 gender data but only 1 MRQID (only 1 MRI session)
+
+for (i in 1:length(subid)) {
+  newdf <- df %>% filter(sub == subid[i])
+  if ((length(newdf$sub)) == 1) {
+    print(newdf$sub)
+    print(newdf$ses)
+  }
+}
+```
