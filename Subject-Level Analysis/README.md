@@ -8,7 +8,7 @@ Section List
 5. [Run FMRIPREP](#-5.-Run-FMRIPREP)
 6. [Run MRIQC](#-6.-Run-MRIQC)
 7. [Create masks for the extended Power ROI](#-7.-Create-masks-for-the-extended-Power-ROI)
-8. [Post-processing after fMRIPrep: Nuisance Regression & Signal extraction](#-8.-Post-processing-after-fMRIPrep:-Nuisance-Regression-&-Signal-extraction)
+8. [Post-processing after fMRIPrep](#-8.-Post-processing-after-fMRIPrep:-Nuisance-Regression-&-Signal-extraction)
 
 
 # 1. BIDS Conversion Using Heudiconv
