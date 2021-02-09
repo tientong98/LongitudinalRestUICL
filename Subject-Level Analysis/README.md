@@ -176,17 +176,6 @@ bash /Shared/oleary/functional/UICL/BIDS/code/GE_dcm_to_nii.sh \
 # PhaseEncodingDirection=AP
 ```
 
-
-```python
-from nipype.utils.filemanip import loadpkl
-path = "/Shared/oleary/functional/UICL/BIDS/derivatives/fmriprep/rest_time2/fmriprep_wf/single_subject_3040_wf/func_preproc_ses_63910816_task_rest_wf/ica_aroma_wf/ica_aroma_confound_extraction/"
-res = loadpkl(path + 'result_ica_aroma_confound_extraction.pklz')
-res
-```
-
-{'in_file': '/mnt/functional/UICL/BIDS/derivatives/fmriprep/rest_time2/fmriprep_wf/single_subject_3203_wf/func_preproc_ses_61778918_task_rest_wf/bold_bold_trans_wf/merge/vol0000_xform-00000_merged.nii.gz',
- 'mc_method': 'AFNI'}
-
 # 5. Run FMRIPREP
 
 Note: As of Sep 5 2019 fmriprep version 1.4.1 the ANTs command for fieldmap-less distortion correction (`--use-syn-sdc`) didn't work with the new MNI152 template (details here https://github.com/poldracklab/fmriprep/issues/1665)
@@ -277,8 +266,8 @@ done
 ```
 ### 5.1. Get Framewise Displacement and counts of excessive movements (> 3mm)
 
-(get_fd.R)[https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_fd.R]
-(get_movement.R)[https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_movement.R]
+[get_fd.R](https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_fd.R)
+[get_movement.R](https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_movement.R)
 
 # 6. Run MRIQC
 
