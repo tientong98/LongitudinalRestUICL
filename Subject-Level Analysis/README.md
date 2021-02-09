@@ -263,6 +263,10 @@ for sub in $(awk '{print $2}' /Shared/oleary/functional/UICL/BIDS/code/time2/tim
 done
  
 ```
+### 5.1. Get Framewise Displacement and counts of excessive movements (> 3mm)
+
+(get_fd.R)[https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_fd.R]
+(get_movement.R)[https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/get_movement.R]
 
 # 6. Run MRIQC
 
