@@ -8,7 +8,7 @@ Section List
 5. [Run FMRIPREP](#-5.-Run-FMRIPREP)
 6. [Run MRIQC](#-6.-Run-MRIQC)
 7. [Create masks for the extended Power ROI](#-7.-Create-masks-for-the-extended-Power-ROI)
-8. [Post-processing after fMRIPrep](#-8.-Post-processing-after-fMRIPrep:-Nuisance-Regression-&-Signal-extraction)
+8. [Post-processing after fMRIPrep](#-8.-Post-processing-after-fMRIPrep)
 
 
 # 1. BIDS Conversion Using Heudiconv
@@ -368,7 +368,7 @@ Then run
 
 to create 300 spherical ROIs, or any other seeds of interest from this atlas
 
-# 8. Post-processing after fMRIPrep: Nuisance Regression & Signal extraction
+# 8. Post-processing after fMRIPrep
 
 Code in: [afterfMRIPrep_01runall.sh](https://github.com/tientong98/RestUICL/blob/main/Subject-Level%20Analysis/afterfMRIPrep_01runall.sh). A wrapper to run all steps after fMRIPrep
 
