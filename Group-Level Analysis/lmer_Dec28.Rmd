@@ -1,0 +1,719 @@
+---
+title: "lmer_Dec28"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lme4)
+library(nlme)
+library(jtools)
+library(EMAtools)
+library(tidyverse)
+library(modelsummary)
+```
+
+
+```{r}
+# edit this chunk to run codes on your local machine
+
+dir <- "~/Documents/oleary/rest/" 
+datafile <- "~/Documents/oleary/rest/finaldfex.RDS" # created by 01-clean_updateOct21.R
+```
+
+## Load and prepare data
+
+```{r}
+setwd(dir)
+finaldfex <- readRDS(datafile)
+finaldfex$group <- droplevels(finaldfex$group)
+
+# Jatin's suggestion: turn SES to numeric instead of factor
+finaldfex$V1_ParentHighestDegree.num <- as.numeric(finaldfex$V1_ParentHighestDegree)
+finaldfex$V1_ParentSES.num <- as.numeric(finaldfex$V1_ParentSES)
+
+finaldfex <- finaldfex %>%
+  mutate(ses_ord = recode(finaldfex$ses_ord, `1` = 0, `2` = 1)) %>%
+  arrange(id) %>%
+  mutate(age_baseline = 
+           rep(finaldfex[finaldfex$ses_ord == 1, c("age")], each = 2))
+
+# Doug's suggestion: Change all longitudinal substance variables to 0 (on the Time 1 row)
+finaldfex[finaldfex$ses_ord == 0, c(8:37)] <- 0
+
+# add scanner info
+finaldfex$scanner_info <- finaldfex$time2_scanner
+finaldfex[finaldfex$ses_ord == 0, "scanner_info"] <- "siemens"
+finaldfex <- finaldfex %>% 
+  mutate(scanner_info = as.factor(finaldfex$scanner_info)) %>%
+  select(id, ses, ses_ord, scanner_info, time2_scanner, 
+         age, age_baseline, group, everything())
+
+# log transform sum and sd substance use 
+cols <- c("sum.sbinge","sum.ebinge","sum.cannabis","sum.tobacco",
+          "sd.sbinge","sd.ebinge","sd.cannabis","sd.tobacco")
+cols_log <- c("sum.sbinge.log","sum.ebinge.log","sum.cannabis.log","sum.tobacco.log",
+              "sd.sbinge.log","sd.ebinge.log","sd.cannabis.log","sd.tobacco.log")
+finaldfex[cols_log] <- log(finaldfex[cols] + 1)
+saveRDS(finaldfex, "~/Documents/oleary/rest/finaldfex_final.RDS")
+```
+
+
+```{r}
+# getting only the relevant networks
+grep_fcon <- c("Reward", "MedialTemporal", "FrontoParietal", "CinguloOpercular",
+               "DefaultMode",  "DorsalAttention", "VentralAttention", "Salience")
+concat <- grep(paste(grep_fcon,collapse="|"), names(finaldfex), value=TRUE)
+exclude_fcon <- c("Auditory", "ParietoMedial",
+                  "SomatomotorDorsal","SomatomotorLateral","Visual")
+selectedfcon_names <- concat[-grep(paste(exclude_fcon,collapse="|"), concat)]
+
+print(paste0("Number of outcome variables: ", length(selectedfcon_names)))
+# names(finaldfex)
+finaldfex_nonfcon <- finaldfex[c(1:48,140:149)]
+finaldfex_fcon <- finaldfex[selectedfcon_names]
+finaldfex_merge <- cbind(finaldfex_nonfcon, finaldfex_fcon)
+```
+
+
+
+```{r}
+datasummary(age + fd + sum.sbinge + sum.ebinge
+            ~ Factor(ses_ord) * group * (mean + sd), data = finaldfex_nonfcon)
+```
+
+```{r}
+finaldfex_nonfcon.t1 <- finaldfex_nonfcon %>% filter(ses_ord==0)
+finaldfex_nonfcon.t2 <- finaldfex_nonfcon %>% filter(ses_ord==1)
+
+finaldfex_merge.t1 <- finaldfex_merge %>% filter(ses_ord==0)
+finaldfex_merge.t2 <- finaldfex_merge %>% filter(ses_ord==1)
+```
+
+
+```{r}
+psych::describeBy(finaldfex_nonfcon.t2$sum.sbinge, finaldfex_nonfcon.t2$group)
+psych::describeBy(finaldfex_nonfcon.t2$sum.ebinge, finaldfex_nonfcon.t2$group)
+
+```
+
+
+```{r}
+finaldfex_nonfcon %>%
+  filter(ses_ord == 0) %>%
+  rstatix::anova_test(age ~ group, type=3)
+
+finaldfex_nonfcon %>%
+    filter(ses_ord == 1) %>%
+    rstatix::anova_test(age ~ group, type=3)
+
+finaldfex_nonfcon$session <-  dplyr::recode(finaldfex_nonfcon$ses_ord, `0` = "Time 1", `1` = "Time 2")
+ggplot(finaldfex_nonfcon, aes(x=group, y=age, fill=group)) + 
+    geom_boxplot() +
+    facet_wrap(~session) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18), axis.text.y = element_text(size = 16),
+        strip.text = element_text(size = 18),
+        legend.position = "none") +
+  ylab("Age") +
+  geom_jitter(shape = 15,
+        color = "black",
+        position = position_jitter(0.21))
+```
+
+```{r}
+finaldfex_nonfcon %>%
+    filter(ses_ord == 0) %>%
+    rstatix::anova_test(fd ~ group, type=3)
+
+finaldfex_nonfcon %>%
+    filter(ses_ord == 1) %>%
+    rstatix::anova_test(fd ~ group, type=3)
+
+ggplot(finaldfex_nonfcon, aes(x=group, y=fd, fill=group)) + 
+    geom_boxplot(outlier.shape = NA) +
+    facet_wrap(~session) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18), axis.text.y = element_text(size = 16),
+        strip.text = element_text(size = 18),
+        legend.position = "none") +
+  ylab("Framewise Displacement") +
+  geom_jitter(shape = 15,
+        color = "black",
+        position = position_jitter(0.21))
+```
+
+
+
+```{r}
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.sbinge)) + 
+    geom_boxplot()
+
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.sbinge.log)) + 
+    geom_boxplot()
+
+kruskal.test(sum.sbinge ~ group, data=finaldfex_nonfcon.t2)
+FSA::dunnTest(sum.sbinge ~ group, data=finaldfex_nonfcon.t2,method="bh")
+
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.sbinge, fill=group)) + 
+  geom_boxplot(outlier.shape = NA) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18), axis.text.y = element_text(size = 16),
+        legend.position = "none") +
+  ylab("Cumulative Standard Bingeing") +
+  geom_jitter(shape = 15,
+        color = "black",
+        position = position_jitter(0.21))
+```
+```{r}
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.ebinge)) + 
+    geom_boxplot()
+
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.ebinge.log)) + 
+    geom_boxplot()
+
+kruskal.test(sum.ebinge ~ group, data=finaldfex_nonfcon.t2)
+FSA::dunnTest(sum.ebinge ~ group, data=finaldfex_nonfcon.t2,method="bh")
+
+ggplot(finaldfex_nonfcon.t2, aes(x=group, y=sum.ebinge, fill=group)) + 
+  geom_boxplot(outlier.shape = NA) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18), axis.text.y = element_text(size = 16),
+        legend.position = "none") +
+  ylab("Cumulative Extreme Bingeing") +
+  geom_jitter(shape = 15,
+        color = "black",
+        position = position_jitter(0.21))
+```
+
+Run this for outliers exclusion
+
+outliers <- boxplot(sum.sbinge ~ group, data=finaldfex_nonfcon.t2, plot=FALSE)$out
+finaldfex_nonfcon.t2[which(finaldfex_nonfcon.t2$sum.sbinge %in% outliers),]
+
+```{r}
+chisq.test(finaldfex_nonfcon.t2$sex, finaldfex_nonfcon.t2$group)
+table(finaldfex_nonfcon.t2$sex, finaldfex_nonfcon.t2$group)
+
+chisq.test(finaldfex_nonfcon.t2$Race, finaldfex_nonfcon.t2$group)
+table(finaldfex_nonfcon.t2$Race, finaldfex_nonfcon.t2$group)
+
+chisq.test(finaldfex_nonfcon.t2$Ethnicity, finaldfex_nonfcon.t2$group)
+table(finaldfex_nonfcon.t2$Ethnicity, finaldfex_nonfcon.t2$group)
+
+chisq.test(finaldfex_nonfcon.t2$V1_ParentSES, finaldfex_nonfcon.t2$group)
+table(finaldfex_nonfcon.t2$V1_ParentSES, finaldfex_nonfcon.t2$group)
+```
+
+
+## Model 1: Alcohol only - Accumulated sbinge and ebinge
+
+### Model 1: Test for correlation between predictors
+
+  formula.without.group <- paste(selectedfcon_names[i],
+                   " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES + fd +
+                   sum.sbinge.log + sum.ebinge.log + (1 | id)")
+
+```{r, warning=F}
+library(GGally)
+ses1 <- finaldfex_merge[finaldfex_merge$ses_ord==0, c("age_baseline", "sex", "V1_ParentSES", "fd", "group",
+                                                      "scanner_info")]
+ggpairs(ses1, progress = F)
+```
+
+```{r}
+ses2 <- finaldfex_merge[finaldfex_merge$ses_ord==1, c("age_baseline", "sex", "V1_ParentSES", "fd", "group",
+                                                      "scanner_info", "sum.sbinge.log", "sum.ebinge.log")]
+ggpairs(ses2, progress = F)
+```
+
+sum.sbinge.log is highly correlated with sum.ebinge.log (r=.80). Therefore, each term should be in a separate model.
+
+sd.sbinge.log and sd.ebinge.log are also highly correlated (r=.66), but not as strong as sum. 
+
+Because of the high correlation --> cumulative sBinge and eBinge should be in separate models.
+
+### Model 1a: Fixed effects of of Group and sBinge
+
+```{r}
+sBinge.p <- rep(NA, times = length(selectedfcon_names))
+group.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i],
+                   " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.sbinge.log + scanner_info + (1 | id)")
+  m1 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  sBinge.p[i] <- summ(m1)[["coeftable"]]["sum.sbinge.log","p"]
+  group.p[i] <- car::Anova(m1,type=3)["group","Pr(>Chisq)"]
+  ses_ord.p[i] <- summ(m1)[["coeftable"]]["ses_ord","p"]
+}
+
+sBinge.p.fdr <- p.adjust(sBinge.p, method = "fdr", n = length(sBinge.p))
+group.p.fdr <- p.adjust(group.p, method = "fdr", n = length(group.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+sum(sBinge.p.fdr < .05)
+sum(group.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+
+```
+
+Same model, now controlling for MJ and Tobacco use
+
+
+```{r}
+sBinge.p <- rep(NA, times = length(selectedfcon_names))
+group.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i],
+                   " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + group + sum.sbinge.log + scanner_info + month.use.cannabis + month.use.tobacco + (1 | id)")
+  m1 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  sBinge.p[i] <- summ(m1)[["coeftable"]]["sum.sbinge.log","p"]
+  group.p[i] <- car::Anova(m1,type=3)["group","Pr(>Chisq)"]
+  ses_ord.p[i] <- summ(m1)[["coeftable"]]["ses_ord","p"]
+}
+
+sBinge.p.fdr <- p.adjust(sBinge.p, method = "fdr", n = length(sBinge.p))
+group.p.fdr <- p.adjust(group.p, method = "fdr", n = length(group.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+sum(sBinge.p.fdr < .05)
+sum(group.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+
+```
+
+
+```{r}
+# sBinge: uncorrected p vs. corrected p
+print("Cumulative sBinge, controlling for Group and Time")
+selectedfcon_names[sBinge.p < .05]
+sBinge.p[sBinge.p < .05]
+sBinge.p.fdr[sBinge.p < .05]
+```
+
+
+```{r}
+m1 <- lmer(CinguloOpercular.VentralAttention ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.sbinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=2)[["coeftable"]]["sum.sbinge.log",]
+```
+
+```{r}
+m1 <- lmer(DefaultMode.VentralAttention ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.sbinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=2)[["coeftable"]]["sum.sbinge.log",]
+```
+
+```{r}
+m1 <- lmer(Salience.VentralAttention ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.sbinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=2)[["coeftable"]]["sum.sbinge.log",]
+```
+
+
+# sig model
+
+```{r}
+finaldfex_merge %>%
+  select(ses_ord, DefaultMode.VentralAttention) %>%
+  gather(Measure, Value, -ses_ord) %>%
+  ggplot(aes(x = factor(ses_ord), y = Value)) +
+  geom_boxplot(outlier.shape = NA) + 
+  geom_jitter(width = 0.2) +
+  facet_wrap(~Measure, scales = "free_y") + 
+  ggpubr::stat_compare_means(method = "t.test", paired = TRUE)
+```
+
+```{r}
+finaldfex_merge$session <-  dplyr::recode(finaldfex_nonfcon$ses_ord, `0` = "Time 1", `1` = "Time 2")
+ggplot(finaldfex_merge, aes(x=group, y=DefaultMode.VentralAttention, fill=group)) + 
+    geom_boxplot(outlier.shape = NA) +
+    facet_wrap(~session) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18), axis.text.y = element_text(size = 16),
+        strip.text = element_text(size = 18),
+        legend.position = "none") +
+  ylab("Z-tranformed Correlation") + ggtitle("Connectivity between Default Mode and Ventral Attention") +
+  geom_jitter(shape = 15, color = "black", position = position_jitter(0.21)) +
+  theme(plot.title = element_text(hjust = 0.5, vjust = 2.4,size = 18))
+```
+
+
+```{r}
+formula <- paste("DefaultMode.VentralAttention",
+                  " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.sbinge.log + scanner_info + (1 | id)")
+m1 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+
+finaldfex_merge <- finaldfex_merge %>% mutate(pred = predict(m1))
+
+dDMN.VAN.actual <- finaldfex_merge[finaldfex_merge$ses_ord==1, "DefaultMode.VentralAttention"] - 
+                   finaldfex_merge[finaldfex_merge$ses_ord==0, "DefaultMode.VentralAttention"]
+
+dDMN.VAN.predicted <- finaldfex_merge[finaldfex_merge$ses_ord==1, "pred"] - 
+                      finaldfex_merge[finaldfex_merge$ses_ord==0, "pred"] 
+
+sum.sbinge <- finaldfex_merge[finaldfex_merge$ses_ord==1, "sum.sbinge"]
+sum.sbinge.log <- finaldfex_merge[finaldfex_merge$ses_ord==1, "sum.sbinge.log"]
+sum.ebinge.log <- finaldfex_merge[finaldfex_merge$ses_ord==1, "sum.ebinge.log"]
+Group <-  finaldfex_merge[finaldfex_merge$ses_ord==1, "group"] 
+id <- finaldfex_merge[finaldfex_merge$ses_ord==1, "id"] 
+  
+figure <- data.frame(id, dDMN.VAN.actual, dDMN.VAN.predicted, sum.sbinge, sum.sbinge.log, sum.ebinge.log, Group)
+
+ggplot(figure[!(figure$Group=="sBinge" & figure$sum.sbinge.log==0),], 
+       aes(x=sum.sbinge.log, y=dDMN.VAN.actual, color=Group)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x)
+
+ggplot(figure, aes(x=sum.sbinge.log, y=dDMN.VAN.actual)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x)
+
+ggplot(figure, aes(x=sum.sbinge.log, y=dDMN.VAN.actual, color=Group)) + 
+  geom_point() +
+  ylab("Connectivity Change (Time 2 - Time 1)") +
+  xlab("Cumulative Standard Bingeing") +
+  ggtitle("Connectivity between Default Mode and Ventral Attention") +
+  theme(plot.title = element_text(hjust = 0.5, vjust = 2.4,size = 18)) +
+  theme(axis.text.x = element_text(size = 18), axis.title.x = element_text(size = 16),
+       axis.title.y = element_text(size = 15), axis.text.y = element_text(size = 16)) 
+
+library(extrafont)
+ggplot(figure, aes(x=sum.sbinge.log, y=dDMN.VAN.predicted, color=Group)) + 
+  geom_point() +
+  ylab("Connectivity Change (Time 2-Time 1)") +
+  xlab("Cumulative Standard Bingeing (Log Transformed)") +
+  ggtitle("Connectivity between Default Mode and Ventral Attention") +
+  theme(text=element_text(family="Times New Roman")) +
+  theme(plot.title = element_text(hjust = 0.5, vjust = 2.4,size = 16)) +
+  theme(axis.title.x = element_text(size = 16), axis.text.x = element_text(size = 14),
+       axis.title.y = element_text(size = 16), axis.text.y = element_text(size = 14),
+       legend.title = element_text(size=14), legend.text = element_text(size=14)) +
+  scale_x_continuous(breaks = round(seq(min(figure$sum.sbinge.log), max(figure$sum.sbinge.log),
+                                        by = 1),0))
+ 
+```
+## Correlation
+
+```{r, warning=F}
+all <- foreign::read.spss("~/Documents/oleary/Complete_Dataset_fix_missing_values_fixed_MJ_TB_Binge_FU_addAge.sav", to.data.frame = T, stringsAsFactors = F)
+```
+
+
+```{r}
+final_neuropsy_var <- c("Subject_ID",
+                        "StroopEffect_ColorSquare","StroopEffect_Non_ColorWord",
+                        "DigitSpan_Total_Correct", "LetterFluency_Total_In_Set",
+                        "V1_Elapsed_Time_Trails_BminusA",
+                        "V2_StroopEffect_ColorSquare","V2_StroopEffect_Non_ColorWord",
+                        "V2_DigitSpan_Total_Correct", "V2_LetterFluency_Total_In_Set",
+                        "V2_Elapsed_Time_Trails_BminusA")
+neuropsy_df <- all[final_neuropsy_var] %>%
+  mutate(d_StroopEffect_ColorSquare = V2_StroopEffect_ColorSquare - StroopEffect_ColorSquare,
+         d_StroopEffect_Non_ColorWord = V2_StroopEffect_Non_ColorWord - StroopEffect_Non_ColorWord,
+         d_DigitSpan_Total_Correct = V2_DigitSpan_Total_Correct - DigitSpan_Total_Correct,
+         d_LetterFluency_Total_In_Set = V2_LetterFluency_Total_In_Set - LetterFluency_Total_In_Set,
+         d_Elapsed_Time_Trails_BminusA = V2_Elapsed_Time_Trails_BminusA - V1_Elapsed_Time_Trails_BminusA) %>%
+  rename(id = Subject_ID)
+
+neuropsy_df <- full_join(neuropsy_df, figure)
+neuropsy_df <- neuropsy_df[neuropsy_df$id %in% finaldfex_merge.t1$id,]
+
+neuropsy_df_time1 <- all[c("Subject_ID", "StroopEffect_ColorSquare", "StroopEffect_Non_ColorWord",
+                        "DigitSpan_Total_Correct", "LetterFluency_Total_In_Set",
+                        "V1_Elapsed_Time_Trails_BminusA")] %>%
+  rename(id = Subject_ID)
+neuropsy_df_time1 <- neuropsy_df_time1[neuropsy_df_time1$id %in% finaldfex_merge.t1$id,] %>%
+  mutate(DefaultMode.DorsalAttention.t1 = finaldfex_merge.t1$DefaultMode.DorsalAttention)
+
+neuropsy_df_time2 <- all[c("Subject_ID", "V2_StroopEffect_ColorSquare", "V2_StroopEffect_Non_ColorWord",
+                        "V2_DigitSpan_Total_Correct", "V2_LetterFluency_Total_In_Set",
+                        "V2_Elapsed_Time_Trails_BminusA")] %>%
+  rename(id = Subject_ID)
+neuropsy_df_time2 <- neuropsy_df_time2[neuropsy_df_time2$id %in% finaldfex_merge.t2$id,] %>%
+  mutate(DefaultMode.DorsalAttention.t2 = finaldfex_merge.t2$DefaultMode.DorsalAttention)
+
+neuropsy_df_wide <- full_join(neuropsy_df_time1, neuropsy_df_time2)
+neuropsy_df_long <- reshape(neuropsy_df_wide, direction='long',
+                            varying=c("StroopEffect_ColorSquare","StroopEffect_Non_ColorWord",
+                        "DigitSpan_Total_Correct", "LetterFluency_Total_In_Set", 
+                        "V1_Elapsed_Time_Trails_BminusA", "DefaultMode.DorsalAttention.t1",
+                        "V2_StroopEffect_ColorSquare","V2_StroopEffect_Non_ColorWord",
+                        "V2_DigitSpan_Total_Correct", "V2_LetterFluency_Total_In_Set",
+                        "V2_Elapsed_Time_Trails_BminusA", "DefaultMode.DorsalAttention.t2"),
+                              timevar='ses_ord',
+                              times=c(1, 2),
+                              v.names=c("StroopEffect_ColorSquare","StroopEffect_Non_ColorWord",
+                        "DigitSpan_Total_Correct", "LetterFluency_Total_In_Set",
+                        "Elapsed_Time_Trails_BminusA", "DefaultMode.DorsalAttention"),
+                              idvar=c('id'))
+```
+
+```{r}
+library(Hmisc)
+cor(neuropsy_df$DigitSpan_Total_Correct, neuropsy_df$dDMN.VAN.actual)
+coefficient_fcon.psy <- rcorr(as.matrix(neuropsy_df[, c("d_StroopEffect_ColorSquare",
+                                                  "d_StroopEffect_Non_ColorWord", 
+                                                  "d_DigitSpan_Total_Correct",
+                                                  "d_LetterFluency_Total_In_Set",
+                                                  "d_Elapsed_Time_Trails_BminusA",
+                                                  "dDMN.VAN.actual")]))[["r"]]
+pvalue_fcon.psy <- rcorr(as.matrix(neuropsy_df[, c("d_StroopEffect_ColorSquare",
+                                                  "d_StroopEffect_Non_ColorWord", 
+                                                  "d_DigitSpan_Total_Correct",
+                                                  "d_LetterFluency_Total_In_Set",
+                                                  "d_Elapsed_Time_Trails_BminusA",
+                                                  "dDMN.VAN.actual")]))[["P"]]
+
+write.table(coefficient_fcon.psy, row.names = T, col.names = NA, sep = "\t", quote = F, 
+            file = "~/Documents/oleary/rest/correl_fconpsy_coefficient.txt")
+write.table(pvalue_fcon.psy, row.names = T, col.names = NA, sep = "\t", quote = F, 
+            file = "~/Documents/oleary/rest/correl_fconpsy_pvalue.txt")
+
+
+
+coefficient_binge.psy <- rcorr(as.matrix(neuropsy_df[, c("d_StroopEffect_ColorSquare",
+                                                  "d_StroopEffect_Non_ColorWord", 
+                                                  "d_DigitSpan_Total_Correct",
+                                                  "d_LetterFluency_Total_In_Set",
+                                                  "d_Elapsed_Time_Trails_BminusA",
+                                                  "sum.sbinge.log", "sum.ebinge.log")]), 
+                               type = 'spearman')[["r"]]
+pvalue_binge.psy <- rcorr(as.matrix(neuropsy_df[, c("d_StroopEffect_ColorSquare",
+                                                  "d_StroopEffect_Non_ColorWord", 
+                                                  "d_DigitSpan_Total_Correct",
+                                                  "d_LetterFluency_Total_In_Set",
+                                                  "d_Elapsed_Time_Trails_BminusA",
+                                                  "sum.sbinge.log", "sum.ebinge.log")]), 
+                          type = 'spearman')[["P"]]
+
+write.table(coefficient_binge.psy, row.names = T, col.names = NA, sep = "\t", quote = F, 
+            file = "~/Documents/oleary/rest/correl_bingepsy_coefficient.txt")
+write.table(pvalue_binge.psy, row.names = T, col.names = NA, sep = "\t", quote = F, 
+            file = "~/Documents/oleary/rest/correl_bingepsy_pvalue.txt")
+  
+```
+
+
+```{r}
+GGally::ggpairs(neuropsy_df[, c("d_StroopEffect_ColorSquare", "d_StroopEffect_Non_ColorWord", 
+                        "d_DigitSpan_Total_Correct", "d_LetterFluency_Total_In_Set",
+                        "d_Elapsed_Time_Trails_BminusA", "dDMN.VAN.actual")], progress = F)
+```
+
+
+```{r}
+cor(neuropsy_df$sum.sbinge.log, neuropsy_df$d_StroopEffect_ColorSquare, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.sbinge.log, neuropsy_df$d_StroopEffect_Non_ColorWord, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.sbinge.log, neuropsy_df$d_DigitSpan_Total_Correct, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.sbinge.log, neuropsy_df$d_LetterFluency_Total_In_Set, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.sbinge.log, neuropsy_df$d_Elapsed_Time_Trails_BminusA, method = "spearman", use = "complete.obs")
+```
+
+```{r}
+cor(neuropsy_df$sum.ebinge.log, neuropsy_df$d_StroopEffect_ColorSquare, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.ebinge.log, neuropsy_df$d_StroopEffect_Non_ColorWord, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.ebinge.log, neuropsy_df$d_DigitSpan_Total_Correct, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.ebinge.log, neuropsy_df$d_LetterFluency_Total_In_Set, method = "spearman", use = "complete.obs")
+cor(neuropsy_df$sum.ebinge.log, neuropsy_df$d_Elapsed_Time_Trails_BminusA, method = "spearman", use = "complete.obs")
+```
+
+### Model 1b: Fixed effects of of Group and eBinge
+
+*Test the simplest model*
+
+```{r}
+eBinge.p <- rep(NA, times = length(selectedfcon_names))
+group.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i],
+                   " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.ebinge.log + scanner_info + (1 | id)")
+  m1 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  eBinge.p[i] <- summ(m1)[["coeftable"]]["sum.ebinge.log","p"]
+  group.p[i] <- car::Anova(m1,type=3)["group","Pr(>Chisq)"]
+  ses_ord.p[i] <- summ(m1)[["coeftable"]]["ses_ord","p"]
+}
+
+eBinge.p.fdr <- p.adjust(eBinge.p, method = "fdr", n = length(eBinge.p))
+group.p.fdr <- p.adjust(group.p, method = "fdr", n = length(group.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+sum(eBinge.p.fdr < .05)
+sum(group.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+```
+
+
+```{r}
+# eBinge: uncorrected p vs. corrected p
+print("Cumulative eBinge, controlling for Group and Time")
+selectedfcon_names[eBinge.p < .05]
+eBinge.p[eBinge.p < .05]
+eBinge.p.fdr[eBinge.p < .05]
+```
+
+```{r}
+m1 <- lmer(MedialTemporal ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.ebinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=5)[["coeftable"]]["sum.ebinge.log",]
+```
+
+```{r}
+m1 <- lmer(DefaultMode.VentralAttention ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.ebinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=5)[["coeftable"]]["sum.ebinge.log",]
+```
+
+```{r}
+m1 <- lmer(FrontoParietal.MedialTemporal ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.ebinge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=5)[["coeftable"]]["sum.ebinge.log",]
+```
+
+### Model 1c: Fixed effects of of Group and Binge (adding sbinge and ebinge)
+
+*Test the simplest model*
+
+```{r}
+finaldfex_merge <- finaldfex_merge %>% mutate(sum.binge.log = sum.sbinge.log + sum.ebinge.log )
+
+Binge.p <- rep(NA, times = length(selectedfcon_names))
+group.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i],
+                   " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+                   group + sum.binge.log + scanner_info + (1 | id)")
+  m1 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  Binge.p[i] <- summ(m1)[["coeftable"]]["sum.binge.log","p"]
+  group.p[i] <- car::Anova(m1,type=3)["group","Pr(>Chisq)"]
+  ses_ord.p[i] <- summ(m1)[["coeftable"]]["ses_ord","p"]
+}
+
+Binge.p.fdr <- p.adjust(Binge.p, method = "fdr", n = length(Binge.p))
+group.p.fdr <- p.adjust(group.p, method = "fdr", n = length(group.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+sum(Binge.p.fdr < .05)
+sum(group.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+```
+
+```{r}
+# Binge: uncorrected p vs. corrected p
+print("Cumulative Binge, controlling for Group and Time")
+selectedfcon_names[Binge.p < .05]
+Binge.p[Binge.p < .05]
+Binge.p.fdr[Binge.p < .05]
+```
+
+```{r}
+m1 <- lmer(MedialTemporal ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.binge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=3)[["coeftable"]]["sum.binge.log",]
+```
+
+
+```{r}
+m1 <- lmer(DefaultMode.VentralAttention ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.binge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=3)[["coeftable"]]["sum.binge.log",]
+```
+
+
+```{r}
+m1 <- lmer(FrontoParietal.MedialTemporal ~ 
+             age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + 
+             group + sum.binge.log + scanner_info + (1 | id), data = finaldfex_merge, REML = 0)
+summ(m1, digits=3)[["coeftable"]]["sum.binge.log",]
+```
+
+
+## Model 2: Alcohol MJ and Tobacco - Accumulated use
+
+```{r}
+sbinge.p <- rep(NA, times = length(selectedfcon_names))
+ebinge.p <- rep(NA, times = length(selectedfcon_names))
+cannabis.p <- rep(NA, times = length(selectedfcon_names))
+tobacco.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i], 
+                     " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + group +
+                   scanner_info +sum.sbinge.log + sum.ebinge.log + month.use.cannabis + month.use.tobacco + (1 | id)")
+  m2 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  sbinge.p[i] <- summ(m2)[["coeftable"]]["sum.sbinge.log","p"]
+  ebinge.p[i] <- summ(m2)[["coeftable"]]["sum.ebinge.log","p"]
+  cannabis.p[i] <- summ(m2)[["coeftable"]]["month.use.cannabis","p"]
+  tobacco.p[i] <- summ(m2)[["coeftable"]]["month.use.tobacco","p"]
+  ses_ord.p[i] <- summ(m2)[["coeftable"]]["ses_ord","p"]
+}
+
+sbinge.p.fdr <- p.adjust(sbinge.p, method = "fdr", n = length(sbinge.p))
+ebinge.p.fdr <- p.adjust(ebinge.p, method = "fdr", n = length(ebinge.p))
+cannabis.p.fdr <- p.adjust(cannabis.p, method = "fdr", n = length(cannabis.p))
+tobacco.p.fdr <- p.adjust(tobacco.p, method = "fdr", n = length(tobacco.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+
+sum(sbinge.p.fdr < .05)
+sum(ebinge.p.fdr < .05)
+sum(cannabis.p.fdr < .05)
+sum(tobacco.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+
+```
+
+## Model 2b: Alcohol MJ and Tobacco - Accumulated use (adding sbinge and ebinge)
+
+```{r}
+Binge.p <- rep(NA, times = length(selectedfcon_names))
+cannabis.p <- rep(NA, times = length(selectedfcon_names))
+tobacco.p <- rep(NA, times = length(selectedfcon_names))
+ses_ord.p <- rep(NA, times = length(selectedfcon_names))
+
+for (i in 1:length(selectedfcon_names)) {
+  formula <- paste(selectedfcon_names[i], 
+                     " ~ age_baseline + ses_ord + ses_ord:age_baseline + sex + V1_ParentSES.num + fd + group +
+                   scanner_info + sum.binge.log + month.use.cannabis + month.use.tobacco + (1 | id)")
+  m2 <- lmer(eval(parse(text = formula)), data = finaldfex_merge, REML = 0)
+  Binge.p[i] <- summ(m2)[["coeftable"]]["sum.binge.log","p"]
+  cannabis.p[i] <- summ(m2)[["coeftable"]]["month.use.cannabis","p"]
+  tobacco.p[i] <- summ(m2)[["coeftable"]]["month.use.tobacco","p"]
+  ses_ord.p[i] <- summ(m2)[["coeftable"]]["ses_ord","p"]
+}
+
+Binge.p.fdr <- p.adjust(Binge.p, method = "fdr", n = length(Binge.p))
+cannabis.p.fdr <- p.adjust(cannabis.p, method = "fdr", n = length(cannabis.p))
+tobacco.p.fdr <- p.adjust(tobacco.p, method = "fdr", n = length(tobacco.p))
+ses_ord.p.fdr <- p.adjust(ses_ord.p, method = "fdr", n = length(ses_ord.p))
+
+
+sum(Binge.p.fdr < .05)
+sum(cannabis.p.fdr < .05)
+sum(tobacco.p.fdr < .05)
+sum(ses_ord.p.fdr < .05)
+
+```
+
+
