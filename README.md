@@ -13,3 +13,6 @@ Codes for the longitudinal resting-state analysis from the University of Iowa Co
   
   
 * [Group-Level Analysis](https://github.com/tientong98/RestUICL/tree/main/Group-Level%20Analysis)
+  * [Aggregate subject-level data into group-level dataframe](https://github.com/tientong98/RestUICL/tree/main/Group-Level%20Analysis#1-clean-up-subject-level-data-aggregate-into-a-large-dataframe)
+  * [Network-Level Connectivity](https://github.com/tientong98/RestUICL/tree/main/Group-Level%20Analysis#2-network-level-connectivity): Linear mixed-effects models  
+  * [Edge-Level Connectivity](https://github.com/tientong98/RestUICL/tree/main/Group-Level%20Analysis#3-edge-level-connectivity): Connectome-base predictive modeling
