@@ -1,5 +1,5 @@
 # Rest UICL
-Codes for the longitudinal resting-state analysis from the University of Iowa College Life (UICL) study
+Codes for the longitudinal resting-state analysis from the University of Iowa College Life (UICL) study. Read preprint: https://www.biorxiv.org/content/10.1101/2021.02.09.430381v1
 
 * [Subject-Level Analysis](https://github.com/tientong98/RestUICL/tree/main/Subject-Level%20Analysis)
   * [BIDS Conversion Using Heudiconv](https://github.com/tientong98/RestUICL/tree/main/Subject-Level%20Analysis#1-bids-conversion-using-heudiconv)
